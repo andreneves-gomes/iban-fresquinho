@@ -1,10 +1,11 @@
-export const MAX_PLATE_BATCH_SIZE = 100;
-export const FIRST_REGISTRATION_YEAR = 1937;
-export const DEFAULT_FROM_YEAR = 2000;
-export const DISPLACEMENT_LIMITS = { min: 600, max: 6500 } as const;
-export const POWER_LIMITS = { min: 30, max: 650 } as const;
+import { CATALOGUE, FIRST_CATALOGUE_YEAR, typicalPrice, type CatalogueVersion } from './vehicles';
 
-const DEFAULT_DISPLACEMENT = { min: 900, max: 2500 } as const;
+export const MAX_PLATE_BATCH_SIZE = 100;
+export const DEFAULT_FROM_YEAR = 2000;
+export const DISPLACEMENT_LIMITS = { min: 500, max: 6500 } as const;
+export const POWER_LIMITS = { min: 20, max: 650 } as const;
+/** Generated prices vary this much around the typical asking price. */
+export const PRICE_SPREAD = 0.12;
 
 export type PlateEra = 'AA-00-00' | '00-00-AA' | '00-AA-00' | 'AA-00-AA';
 export type PlateStyle = 'black' | 'white' | 'dated' | 'modern';
@@ -14,34 +15,6 @@ interface Range {
   min: number;
   max: number;
 }
-
-// Plausible output in cv per litre for each fuel, before the era cap.
-const SPECIFIC_POWER: Readonly<Record<Fuel, Range>> = {
-  Gasolina: { min: 45, max: 115 },
-  Gasóleo: { min: 40, max: 95 },
-  Híbrido: { min: 55, max: 100 },
-};
-
-// Older engines produced less: [first year without the cap, cv per litre cap], oldest first.
-const ERA_CAPS: Readonly<Record<Fuel, readonly (readonly [number, number])[]>> = {
-  Gasolina: [
-    [1990, 75],
-    [2005, 100],
-  ],
-  Gasóleo: [
-    [1990, 50],
-    [2000, 65],
-    [2005, 80],
-  ],
-  Híbrido: [],
-};
-
-// Smallest common engine per fuel; rare micro diesels and hybrids are left out.
-const MIN_FUEL_DISPLACEMENT: Readonly<Record<Fuel, number>> = {
-  Gasolina: 600,
-  Gasóleo: 1200,
-  Híbrido: 1000,
-};
 
 export interface YearMonth {
   year: number;
@@ -61,9 +34,14 @@ export interface VehicleResult {
   plate: string;
   era: PlateEra;
   firstRegistration: YearMonth;
+  make: string;
+  model: string;
+  version: string;
   displacement: number;
   power: number;
   fuel: Fuel;
+  /** Approximate asking price in euros, rounded to 50. */
+  price: number;
 }
 
 export type VehicleFilterField = 'year' | 'month' | 'displacement' | 'power' | 'combination';
@@ -216,39 +194,13 @@ function boundedRange(
   return range;
 }
 
-interface ResolvedFilters {
+interface Candidate {
+  version: CatalogueVersion;
   dates: YearMonth[];
-  displacement: Range;
-  power: Range;
 }
 
-/** Plausible cv per litre for a fuel in a given year; older engines produced less. */
-export function specificPowerRange(fuel: Fuel, { year }: YearMonth): Range {
-  const range = SPECIFIC_POWER[fuel];
-  const eraCap = ERA_CAPS[fuel].find(([before]) => year < before)?.[1] ?? range.max;
-  return { min: range.min, max: Math.min(range.max, eraCap) };
-}
-
-function fuelsFor({ year }: YearMonth): readonly Fuel[] {
-  return year < 2000 ? ['Gasolina', 'Gasóleo'] : ['Gasolina', 'Gasóleo', 'Híbrido'];
-}
-
-function feasibleDisplacement(
-  fuel: Fuel,
-  date: YearMonth,
-  displacement: Range,
-  power: Range
-): Range | null {
-  const specific = specificPowerRange(fuel, date);
-  const range = {
-    min: Math.max(
-      displacement.min,
-      MIN_FUEL_DISPLACEMENT[fuel],
-      Math.ceil((power.min * 1000) / specific.max)
-    ),
-    max: Math.min(displacement.max, Math.floor((power.max * 1000) / specific.min)),
-  };
-  return range.min <= range.max ? range : null;
+interface ResolvedFilters {
+  candidates: Candidate[];
 }
 
 export function resolveVehicleFilters(
@@ -259,7 +211,7 @@ export function resolveVehicleFilters(
   const { year, month } = filters;
   if (
     year !== undefined &&
-    (!Number.isInteger(year) || year < FIRST_REGISTRATION_YEAR || year > current.year)
+    (!Number.isInteger(year) || year < FIRST_CATALOGUE_YEAR || year > current.year)
   ) {
     throw new VehicleFilterError('year', 'Invalid first-registration year');
   }
@@ -277,50 +229,46 @@ export function resolveVehicleFilters(
     throw new VehicleFilterError('month', 'First registration cannot be in the future');
   }
 
-  const power = boundedRange(filters.minPower, filters.maxPower, POWER_LIMITS, 'power');
-  // Without any engine filter, stay within everyday cars; any filter opens the full range.
-  const unfiltered =
-    filters.minDisplacement === undefined &&
-    filters.maxDisplacement === undefined &&
-    filters.minPower === undefined &&
-    filters.maxPower === undefined;
-  const displacement = unfiltered
-    ? { ...DEFAULT_DISPLACEMENT }
-    : boundedRange(
-        filters.minDisplacement,
-        filters.maxDisplacement,
-        DISPLACEMENT_LIMITS,
-        'displacement'
-      );
-
-  const feasibleDates = dates.filter((date) =>
-    fuelsFor(date).some((fuel) => feasibleDisplacement(fuel, date, displacement, power))
+  const displacement = boundedRange(
+    filters.minDisplacement,
+    filters.maxDisplacement,
+    DISPLACEMENT_LIMITS,
+    'displacement'
   );
-  if (feasibleDates.length === 0) {
-    throw new VehicleFilterError('combination', 'No plausible displacement and power combination');
+  const power = boundedRange(filters.minPower, filters.maxPower, POWER_LIMITS, 'power');
+
+  const candidates = CATALOGUE.flatMap((version) => {
+    if (
+      version.displacement < displacement.min ||
+      version.displacement > displacement.max ||
+      version.power < power.min ||
+      version.power > power.max
+    ) {
+      return [];
+    }
+    const sold = dates.filter(({ year: y }) => y >= version.from && y <= version.to);
+    return sold.length > 0 ? [{ version, dates: sold }] : [];
+  });
+  if (candidates.length === 0) {
+    throw new VehicleFilterError('combination', 'No catalogue version matches these filters');
   }
-  return { dates: feasibleDates, displacement, power };
+  return { candidates };
 }
 
-function createFromResolved({ dates, displacement, power }: ResolvedFilters): VehicleResult {
+function createFromResolved({ candidates }: ResolvedFilters): VehicleResult {
+  const { version, dates } = pickItem(candidates);
   const firstRegistration = pickItem(dates);
-  const options = fuelsFor(firstRegistration).flatMap((fuel) => {
-    const range = feasibleDisplacement(fuel, firstRegistration, displacement, power);
-    return range ? [{ fuel, range }] : [];
-  });
-  const { fuel, range } = pickItem(options);
-  const specific = specificPowerRange(fuel, firstRegistration);
-  const cm3 = randomInt(range.min, range.max);
-  const cv = randomInt(
-    Math.max(power.min, Math.ceil((cm3 * specific.min) / 1000)),
-    Math.min(power.max, Math.floor((cm3 * specific.max) / 1000))
-  );
+  const spread = 1 - PRICE_SPREAD + Math.random() * PRICE_SPREAD * 2;
   return {
     ...createPlate(firstRegistration),
     firstRegistration,
-    displacement: cm3,
-    power: cv,
-    fuel,
+    make: version.make,
+    model: version.model,
+    version: version.version,
+    displacement: version.displacement,
+    power: version.power,
+    fuel: version.fuel,
+    price: Math.max(50, Math.round((typicalPrice(version, firstRegistration) * spread) / 50) * 50),
   };
 }
 

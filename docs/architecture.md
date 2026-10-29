@@ -8,6 +8,7 @@ flowchart LR
   main --> iban[src/iban.ts]
   main --> nif[src/nif.ts]
   main --> plate[src/plate.ts]
+  plate --> vehicles[src/vehicles.ts]
   main --> banks[src/banks.ts]
   main --> pwa[src/pwa.ts]
   iban --> types[src/types.ts]
@@ -21,6 +22,7 @@ flowchart LR
 | -------------- | ------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Domain         | `iban.ts`, `nif.ts`, `plate.ts`       | Pure functions, no DOM. Invalid input throws `RangeError` (plate filters throw `VehicleFilterError`, which names the field). Batches are unique and give up after `count × 10` attempts instead of returning a partial batch. |
 | Reference data | `banks.ts`, `bank-reference.json`     | A dated, immutable snapshot of the Banco de Portugal list. See [iban-reference.md](iban-reference.md).                                                      |
+| Reference data | `vehicles.ts`                         | A dated catalogue of real car versions with price anchors. See [plate-reference.md](plate-reference.md#vehicle-catalogue-srcvehiclests).                     |
 | Interface      | `main.ts`, `index.html`, `styles.css` | Owns all state and DOM work. Writes text with `textContent` only.                                                                                           |
 | Offline        | `pwa.ts`, `vite.config.ts`            | Registers the service worker in production builds and asks before applying updates.                                                                         |
 
@@ -69,7 +71,7 @@ The prefix is a disclosure button (`#tool-prefix`) that opens a list of tool but
 
 `generateResults()` validates the quantity, calls `generateIdentifiers()` for the active tool and passes the result to `renderResults()`. On failure, the previous results stay visible and an error is shown. A screen-reader status announces each new batch.
 
-For plates, `vehicleFilters()` reads the inputs; empty means "any" and a malformed number becomes `NaN` so the domain rejects it. A `VehicleFilterError` goes to `setFilterError()`, which shows the message under the filters, marks the matching inputs with `aria-invalid` and focuses the first one. Each plate is drawn by `plateElement()` in the design of its first-registration month (black, white, white with the yellow date band, or the 2020 design) with a summary line underneath. The copied value is the plate text only.
+For plates, `vehicleFilters()` reads the inputs; empty means "any" and a malformed number becomes `NaN` so the domain rejects it. A `VehicleFilterError` goes to `setFilterError()`, which shows the message under the filters, marks the matching inputs with `aria-invalid` and focuses the first one. Each plate is drawn by `plateElement()` in the design of its first-registration month (black, white, white with the yellow date band, or the 2020 design), followed by the car name (`.result-vehicle`) and a summary line with date, cm³, cv, fuel and the indicative price formatted in euros. The copied value is the plate text only.
 
 ### Clipboard
 
@@ -105,7 +107,8 @@ The Content Security Policy in `vercel.json` allows only same-origin scripts, st
 | ------------------ | ------------------------------------------------------------------------------------------------------- |
 | `iban.test.ts`     | Algorithms against a SWIFT vector and independent `BigInt` calculations, invalid input, collisions      |
 | `nif.test.ts`      | All 11 checksum remainders, profiles, batch limits, collisions                                          |
-| `plate.test.ts`    | Era boundaries, letter and reserved-group rules, filter validation and combinations, the power model, batch invariants |
+| `plate.test.ts`    | Era boundaries, letter and reserved-group rules, filter validation and combinations, batch invariants against the catalogue and price spread |
+| `vehicles.test.ts` | Catalogue integrity (ranges, years sold, duplicates, year coverage) and the depreciation model |
 | `banks.test.ts`    | Catalogue counts, source metadata and the default-generation policy                                     |
 | `main.test.ts`     | The real `index.html` in jsdom, driven through DOM events: switching, state, clipboard, picker, dialogs |
 | `pwa.test.ts`      | Update prompt and reload behaviour                                                                      |

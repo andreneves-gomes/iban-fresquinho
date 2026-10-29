@@ -14,7 +14,7 @@ Fresh Portuguese test data with valid check digits, generated entirely in the br
 | ------------------------ | ----------------------------------------------------------------------------------------------- | ------------------------------------------ |
 | **IBAN Fresquinho**      | Portuguese IBANs (`PT50` + 21 digits) for any of 107 published bank codes                       | NIB control digits and ISO 13616 modulo 97 |
 | **NIF Fresquinho**       | Individual (ranges 1, 2, 3) or company (range 5) taxpayer numbers                               | Modulo 11 check digit                      |
-| **Matrícula Fresquinha** | Car registration numbers in the format of their first-registration month, with vehicle data | Format rules of each era since 1937        |
+| **Matrícula Fresquinha** | Car registration numbers in the format of their first-registration month, paired with a real car version and an indicative price | Format rules of each era since 1937        |
 
 > [!IMPORTANT]
 > Results are valid test data. Nothing is looked up: a value may coincide with a real account, taxpayer or vehicle, and validity proves neither existence nor ownership. Use only in authorised test environments, never for payments, identity checks or real claims.
@@ -64,7 +64,8 @@ src/
   main.ts            UI: tool switching, per-tool state, bank picker, clipboard, theme, dialogs
   iban.ts            IBAN generation, validation, parsing and formatting (no DOM)
   nif.ts             NIF generation and checksum validation (no DOM)
-  plate.ts           Licence plates by era, vehicle data model and filters (no DOM)
+  plate.ts           Licence plates by era, vehicle filters and generation (no DOM)
+  vehicles.ts        Catalogue of real car versions and the indicative price model
   banks.ts           Bank catalogue derived from docs/bank-reference.json
   types.ts           Shared IBAN types
   pwa.ts             Service worker registration and consent-based updates
@@ -86,7 +87,7 @@ pnpm-workspace.yaml  Supply-chain settings for pnpm
 | [Maintaining](docs/maintaining.md)       | Release, add a tool, update the bank list, change headers or design |
 | [IBAN reference](docs/iban-reference.md) | Check the IBAN format, algorithms and bank catalogue policy         |
 | [NIF reference](docs/nif-reference.md)   | Check the NIF rules, generated ranges and legal sources             |
-| [Plate reference](docs/plate-reference.md) | Check the plate formats by era, the vehicle data model and sources |
+| [Plate reference](docs/plate-reference.md) | Check the plate formats by era, the vehicle catalogue, the price method and sources |
 | [Security](SECURITY.md)                  | Review data handling, supply-chain controls and hosting limits      |
 
 ## Privacy

@@ -1,8 +1,8 @@
 # Licence plate reference
 
-References checked on 2026-10-23.
+References checked on 2026-10-23; vehicle catalogue and prices on 2026-10-29.
 
-Matrícula Fresquinha generates Portuguese car registration numbers in the format that was in use in the month of first registration, together with fictitious but plausible vehicle data (displacement, power, fuel). Nothing is looked up.
+Matrícula Fresquinha generates Portuguese car registration numbers in the format that was in use in the month of first registration, paired with a real car version from a built-in catalogue (make, model, version, displacement, power, fuel) and an indicative asking price. Nothing is looked up at run time, and the plate is random: it is not the registration of that car.
 
 ## Formats by first registration
 
@@ -31,33 +31,38 @@ Matrícula Fresquinha generates Portuguese car registration numbers in the forma
 - In the `AA-00-00` format, the groups reserved for the armed forces, the state, diplomats and temporary licences are left out: `AM`, `AP`, `CC`, `CD`, `EP`, `FM`, `ME`, `MG`, `MX`, `PR` and `TA` to `TH`.
 - Letters are random within the format. They do **not** follow the real chronological order of the series, so a plate's letters do not prove its date. Use the date in the result, not the letters.
 
-## Vehicle data
+## Vehicle catalogue (`src/vehicles.ts`)
 
-All vehicle data is invented. It is meant to look right to an insurance or registration form, not to describe a real model.
+Each generated vehicle is one row of a catalogue of over 170 versions that are common in Portugal, from the Fiat 600 (1960s) to current hybrids. A row holds make, model, version, fuel (`Gasolina`, `Gasóleo`, `Híbrido`), displacement in cm³, power in cv, the years the version was sold new, and a price anchor. The month and year of first registration are picked within those years.
 
-- **Fuels:** petrol (`Gasolina`), diesel (`Gasóleo`) and, from 2000, hybrid (`Híbrido`). Electric cars, motorcycles, trailers and special plates (military, diplomatic, export, dealer) are not generated.
-- **Displacement:** 600 to 6500 cm³. Diesel starts at 1200 cm³ and hybrid at 1000 cm³, so engines under 1000 cm³ are always petrol.
-- **Power:** 30 to 650 cv, derived from displacement through a plausible output per litre:
+- **Specs** are factory figures. Where possible they were checked against Wikipedia model and engine pages; the rest match the manufacturer's version name and several used-car listings. Hybrids show combined system power. Mild hybrids are listed as `Gasolina`, as in most listings.
+- **Years sold** are approximate European dates, not confirmed Portuguese launch and end dates.
+- **Left out:** electric cars, LPG versions, motorcycles, trailers and special plates (military, diplomatic, export, dealer), and versions with no price observations (for example the Peugeot 205 and Opel Corsa A).
 
-| Fuel     | cv per litre | Era caps                                  |
-| -------- | ------------ | ----------------------------------------- |
-| Gasolina | 45–115       | 75 before 1990, 100 before 2005           |
-| Gasóleo  | 40–95        | 50 before 1990, 65 before 2000, 80 before 2005 |
-| Híbrido  | 55–100       | None (only from 2000)                     |
+### Indicative price
+
+The price is an asking price, not a valuation. It was derived on 2026-10-29 from public used-car search results on Standvirtual (one or two result pages per model, read by hand): only rounded figures were kept, no ads, sellers, locations, mileage or plates.
+
+1. For each version, up to five observed asking prices were noted with their registration year. Most came from dealers, so private sales are usually a little cheaper.
+2. A single yearly depreciation rate was fitted across all versions sold after 2000 (log-linear, within each version): **8.2 % a year** (`DEPRECIATION_RATE = 0.0856`).
+3. Each version stores an anchor: the fitted typical price for one registration year (`priceYear`, `price`). One outlier (the SEAT Ibiza 1.4 16V, a single €390 listing) was replaced by the Volkswagen Polo 1.2 of the same years.
+4. `typicalPrice()` moves the anchor by the rate for each year of difference. Cars older than 20 years stop falling, because old cars plateau or become classics.
+5. Each generated vehicle varies by up to ±12 % around that price (`PRICE_SPREAD`) and is rounded to €50.
+
+Prices drift: refresh the anchors and the rate about once a year with the same method, and update the date at the top of this page.
 
 ### Defaults and filters
 
-| Filter               | Empty means                                 | Accepts                         |
-| -------------------- | ------------------------------------------- | ------------------------------- |
-| Month                | Any month                                   | January to December             |
-| Year                 | 2000 to the current year                    | 1937 to the current year        |
-| Displacement min/max | 900–2500 cm³ while no engine filter is set  | 600–6500 cm³, min ≤ max         |
-| Power min/max        | Whatever the displacement allows            | 30–650 cv, min ≤ max            |
+| Filter               | Empty means              | Accepts                    |
+| -------------------- | ------------------------ | -------------------------- |
+| Month                | Any month                | January to December        |
+| Year                 | 2000 to the current year | 1960 to the current year   |
+| Displacement min/max | Any                      | 500–6500 cm³, min ≤ max    |
+| Power min/max        | Any                      | 20–650 cv, min ≤ max       |
 
 - First registration is never in the future: with a month and no year, months after the current one in the current year are skipped.
-- Setting any displacement or power filter opens displacement to the full 600–6500 cm³, so a request such as "at least 400 cv" can be met.
-- Months in which no fuel can meet the engine filters are dropped. For example, 1000 cm³ with at least 110 cv only exists from 2005 (petrol).
-- Invalid filters and impossible combinations throw `VehicleFilterError` naming what to change: `year`, `month`, `displacement`, `power` or `combination`. The interface marks those fields and keeps the previous results.
+- Only versions whose displacement and power fall inside the filters, and that were sold in at least one allowed month, are offered. Each version is equally likely; the month is then picked among its allowed months.
+- Invalid filters and impossible combinations throw `VehicleFilterError` naming what to change: `year`, `month`, `displacement`, `power` or `combination` (no catalogue version matches). The interface marks those fields and keeps the previous results.
 
 ## API contract (`src/plate.ts`)
 
@@ -65,14 +70,14 @@ All vehicle data is invented. It is meant to look right to an insurance or regis
 - `plateStyle(date)` returns the plate design: `black`, `white`, `dated` or `modern`.
 - `plateEra(value)` returns the format of a value this generator could produce, or `null` for anything malformed, reserved or excluded (wrong alphabet, all-zero digits, reserved group). It is a check of this generator's output, not a registry check.
 - `createPlate(date)` returns `{ plate, era }` with no loops, so it always ends, even with a mocked `Math.random`.
-- `specificPowerRange(fuel, date)` returns the cv-per-litre range used for that fuel and year.
-- `resolveVehicleFilters(filters, now)` validates the filters before any randomness is used and throws `VehicleFilterError` (a `RangeError` with a `field`). It returns the allowed months, displacement and power.
-- `createVehicle(filters, now)` and `createMultipleVehicles(count, filters, now)` return `{ plate, era, firstRegistration, displacement, power, fuel }`. Batches take 1 to 100, are unique by plate, and give up after `count × 10` attempts instead of returning a partial batch.
+- `resolveVehicleFilters(filters, now)` validates the filters before any randomness is used and throws `VehicleFilterError` (a `RangeError` with a `field`). It returns the matching catalogue versions, each with its allowed months.
+- `createVehicle(filters, now)` and `createMultipleVehicles(count, filters, now)` return `{ plate, era, firstRegistration, make, model, version, displacement, power, fuel, price }`. Batches take 1 to 100, are unique by plate, and give up after `count × 10` attempts instead of returning a partial batch.
 - `now` is a parameter so tests can fix the current month.
+- `src/vehicles.ts` exports `CATALOGUE`, `FIRST_CATALOGUE_YEAR`, `typicalPrice(version, date)` and `vehicleName(version)`. Add a version by appending a row; the catalogue tests check ranges, years, duplicates and year coverage.
 
 ## Real vehicles
 
-Almost every combination of the older formats has already been issued, and the current one is being issued now. **A generated plate may belong to a real vehicle with different data.** Do not use the output to identify a vehicle, look up an owner or file a real claim. Use only in authorised test environments.
+Almost every combination of the older formats has already been issued, and the current one is being issued now. **A generated plate may belong to a real vehicle, which is almost certainly not the version shown next to it.** Do not use the output to identify a vehicle, look up an owner or file a real claim. Use only in authorised test environments.
 
 ## Sources
 
@@ -83,4 +88,4 @@ Almost every combination of the older formats has already been issued, and the c
 
 Wikipedia and enthusiast sites are secondary sources. No official IMT table of every series was found; if one is published, prefer it and update this page.
 
-The engine model is a deliberate simplification based on typical outputs per litre, not on a vehicle database.
+Vehicle specs: Wikipedia model and engine pages (for example the Volkswagen Group, PSA, Renault K-Type, Nissan HR, Fiat FIRE and JTD, BMW N47, Mercedes OM651 and Hyundai U engine lists). Prices: Standvirtual public search results, read by hand on 2026-10-29 as described above; no listing data is stored.

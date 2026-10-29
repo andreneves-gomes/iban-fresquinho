@@ -849,8 +849,16 @@ button svg,
   letter-spacing: 0.06em;
   text-shadow: 0 1px 0 rgba(0, 0, 0, 0.6);
 }
-.plate + .result-bank {
-  margin-top: 8px;
+.result-vehicle {
+  margin: 10px 0 0;
+  font-size: 14.5px;
+  font-weight: 650;
+  line-height: 1.4;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+.result-vehicle + .result-bank {
+  margin-top: 2px;
 }
 .result-copy {
   border: 1px solid var(--line);

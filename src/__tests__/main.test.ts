@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { bankCatalogue } from '../banks';
 import { hasValidNIFChecksum } from '../nif';
 import { plateEra } from '../plate';
+import { CATALOGUE, vehicleName } from '../vehicles';
 
 vi.mock('../styles.css', () => ({}));
 vi.mock('../pwa', () => ({ startPWA: vi.fn() }));
@@ -601,7 +602,8 @@ describe('IBAN and NIF Fresquinho', () => {
 
 describe('Matrícula Fresquinha', () => {
   const summaryPattern =
-    /^1\.ª matrícula (\d{2})\/(\d{4}) · (\d+) cm³ · (\d+) cv · (Gasolina|Gasóleo|Híbrido)$/;
+    /^1\.ª matrícula (\d{2})\/(\d{4}) · (\d+) cm³ · (\d+) cv · (Gasolina|Gasóleo|Híbrido) · ≈ (\d[\d\s]*)\s€$/;
+  const catalogueNames = new Set(CATALOGUE.map(vehicleName));
 
   function fill(id: string, value: string): void {
     document.querySelector<HTMLInputElement | HTMLSelectElement>(`#${id}`)!.value = value;
@@ -654,12 +656,16 @@ describe('Matrícula Fresquinha', () => {
     generate(6);
     expect(document.querySelector('#generation-status')!.textContent).toBe('6 matrículas prontas.');
     expect(document.querySelector('#results-heading')!.textContent).toBe('As tuas 6 matrículas');
-    for (const [, month, year, cm3, cv] of summaries()) {
+    for (const [, month, year, cm3, cv, , price = ''] of summaries()) {
       expect([month, year]).toEqual(['06', '2010']);
       expect(Number(cm3)).toBeGreaterThanOrEqual(1500);
       expect(Number(cm3)).toBeLessThanOrEqual(1600);
       expect(Number(cv)).toBeGreaterThanOrEqual(100);
       expect(Number(cv)).toBeLessThanOrEqual(120);
+      expect(Number(price.replace(/\s/g, '')) % 50).toBe(0);
+    }
+    for (const row of rows()) {
+      expect(catalogueNames.has(row.querySelector('.result-vehicle')!.textContent!)).toBe(true);
     }
     expect(plates().every((plate) => /^[0-9]{2}-[A-Z]{2}-[0-9]{2}$/.test(plate))).toBe(true);
     button('#copy-all').click();
@@ -697,8 +703,8 @@ describe('Matrícula Fresquinha', () => {
   });
 
   it.each<[Record<string, string>, string[], string]>([
-    [{ 'plate-year': '1900' }, ['plate-year'], 'Escolhe um ano entre 1937'],
-    [{ 'plate-year': '2026.5' }, ['plate-year'], 'Escolhe um ano entre 1937'],
+    [{ 'plate-year': '1900' }, ['plate-year'], 'Escolhe um ano entre 1960'],
+    [{ 'plate-year': '2026.5' }, ['plate-year'], 'Escolhe um ano entre 1960'],
     [
       { 'plate-year': String(new Date().getFullYear()), 'plate-month': '12' },
       ['plate-month', 'plate-year'],
@@ -712,8 +718,15 @@ describe('Matrícula Fresquinha', () => {
     [{ 'plate-cv-max': '9999' }, ['plate-cv-min', 'plate-cv-max'], 'potência'],
     [
       { 'plate-cm3-min': '600', 'plate-cm3-max': '700', 'plate-cv-min': '300' },
-      ['plate-cm3-min', 'plate-cm3-max', 'plate-cv-min', 'plate-cv-max'],
-      'Não há carros plausíveis',
+      [
+        'plate-month',
+        'plate-year',
+        'plate-cm3-min',
+        'plate-cm3-max',
+        'plate-cv-min',
+        'plate-cv-max',
+      ],
+      'Nenhum carro do catálogo',
     ],
   ])('explains invalid filters %o and keeps the previous results', (values, invalid, message) => {
     button('#tab-plate').click();

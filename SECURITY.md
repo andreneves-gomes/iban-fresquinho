@@ -6,7 +6,7 @@ IBAN Fresquinho is a static, client-side test-data generator. It does not look u
 
 The NIF feature also generates identifiers without querying AT, VIES or any registry. Checksum validity does not verify taxpayer registration, ownership, tax status or an unassigned number. Individual ranges 1-3 and the limited company range 5 are generation profiles, not an exhaustive validation of Portuguese taxpayer categories.
 
-The licence plate feature generates registration numbers in the format of each era without querying IMT or the vehicle register. Almost every combination of the older formats has been issued, so a generated plate may belong to a real vehicle, with a different owner and different data. The displacement, power and fuel shown are invented. Never use the output to identify a vehicle, look up an owner or support a real claim.
+The licence plate feature generates registration numbers in the format of each era without querying IMT or the vehicle register. Almost every combination of the older formats has been issued, so a generated plate may belong to a real vehicle, with a different owner and almost certainly a different model. The car version shown comes from a built-in catalogue of factory specs and its price is an estimate; neither is linked to the plate. The catalogue stores no listing data, only specs and rounded price anchors. Never use the output to identify a vehicle, look up an owner or support a real claim.
 
 No absolute security guarantee is possible. A compromised browser, device, extension, dependency or hosting account remains outside the generator's protection.
 

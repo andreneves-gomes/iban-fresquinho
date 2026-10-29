@@ -8,12 +8,13 @@ import {
   plateEra,
   platesErasFor,
   plateStyle,
+  PRICE_SPREAD,
   resolveVehicleFilters,
-  specificPowerRange,
   VehicleFilterError,
   type VehicleFilters,
   type YearMonth,
 } from '../plate';
+import { CATALOGUE, typicalPrice } from '../vehicles';
 
 const NOW = new Date(2026, 9, 22);
 
@@ -135,77 +136,67 @@ describe('createPlate', () => {
   });
 });
 
+function allowedMonths(filters: VehicleFilters): YearMonth[] {
+  return resolveVehicleFilters(filters, NOW).candidates.flatMap(({ dates }) => dates);
+}
+
 describe('resolveVehicleFilters', () => {
   it('defaults to every month from 2000 up to the current month', () => {
-    const { dates } = resolveVehicleFilters({}, NOW);
-    expect(dates[0]).toEqual({ year: DEFAULT_FROM_YEAR, month: 1 });
-    expect(dates.at(-1)).toEqual({ year: 2026, month: 10 });
-    expect(dates).toHaveLength((2026 - DEFAULT_FROM_YEAR) * 12 + 10);
+    const months = allowedMonths({}).map(({ year, month }) => year * 12 + month);
+    expect(Math.min(...months)).toBe(DEFAULT_FROM_YEAR * 12 + 1);
+    expect(Math.max(...months)).toBe(2026 * 12 + 10);
   });
 
   it('combines year and month filters without future months', () => {
-    expect(resolveVehicleFilters({ year: 2015 }, NOW).dates).toHaveLength(12);
-    expect(resolveVehicleFilters({ year: 2026 }, NOW).dates).toHaveLength(10);
-    const march = resolveVehicleFilters({ month: 3 }, NOW).dates;
-    expect(march.every(({ month }) => month === 3)).toBe(true);
-    expect(march).toHaveLength(2026 - DEFAULT_FROM_YEAR + 1);
-    expect(resolveVehicleFilters({ year: 1937, month: 1 }, NOW).dates).toEqual([
-      { year: 1937, month: 1 },
-    ]);
+    expect(allowedMonths({ year: 2015 }).every(({ year }) => year === 2015)).toBe(true);
+    expect(Math.max(...allowedMonths({ year: 2026 }).map(({ month }) => month))).toBe(10);
+    expect(allowedMonths({ month: 3 }).every(({ month }) => month === 3)).toBe(true);
+    expect(allowedMonths({ year: 1960, month: 1 })).toEqual([{ year: 1960, month: 1 }]);
+  });
+
+  it('offers only versions sold in the chosen year', () => {
+    const names = (year: number): string[] =>
+      resolveVehicleFilters({ year }, NOW).candidates.map(
+        ({ version }) => `${version.make} ${version.model}`
+      );
+    expect(names(1965)).toEqual(['Fiat 600']);
+    expect(names(2026)).toContain('Toyota Yaris');
+    expect(names(2026)).not.toContain('Fiat 600');
+  });
+
+  it('filters versions by displacement and power', () => {
+    const { candidates } = resolveVehicleFilters(
+      { minDisplacement: 900, maxDisplacement: 1000, minPower: 90, maxPower: 100 },
+      NOW
+    );
+    expect(candidates.length).toBeGreaterThan(3);
+    for (const { version } of candidates) {
+      expect(version.displacement).toBeGreaterThanOrEqual(900);
+      expect(version.displacement).toBeLessThanOrEqual(1000);
+      expect(version.power).toBeGreaterThanOrEqual(90);
+      expect(version.power).toBeLessThanOrEqual(100);
+    }
   });
 
   it.each<[VehicleFilters, string]>([
-    [{ year: 1936 }, 'year'],
+    [{ year: 1959 }, 'year'],
     [{ year: 2027 }, 'year'],
     [{ year: 2000.5 }, 'year'],
     [{ month: 0 }, 'month'],
     [{ month: 13 }, 'month'],
     [{ year: 2026, month: 11 }, 'month'],
-    [{ minDisplacement: 599 }, 'displacement'],
+    [{ minDisplacement: 499 }, 'displacement'],
     [{ maxDisplacement: 6501 }, 'displacement'],
     [{ minDisplacement: 2000, maxDisplacement: 1000 }, 'displacement'],
     [{ minDisplacement: 1000.5 }, 'displacement'],
-    [{ minPower: 29 }, 'power'],
+    [{ minPower: 19 }, 'power'],
     [{ maxPower: 651 }, 'power'],
     [{ minPower: 200, maxPower: 100 }, 'power'],
-    [{ minDisplacement: 600, maxDisplacement: 1000, minPower: 300 }, 'combination'],
-    [{ minDisplacement: 6000, maxPower: 100 }, 'combination'],
-    [{ year: 1980, minDisplacement: 1000, maxDisplacement: 1000, minPower: 110 }, 'combination'],
+    [{ minPower: 300 }, 'combination'],
+    [{ minDisplacement: 3000 }, 'combination'],
+    [{ year: 1965, minPower: 100 }, 'combination'],
   ])('rejects %o in %s', (filters, field) => {
     expect(filterError(filters)).toBe(field);
-  });
-
-  it('keeps everyday displacement unless an engine filter is set', () => {
-    expect(resolveVehicleFilters({}, NOW).displacement).toEqual({ min: 900, max: 2500 });
-    expect(resolveVehicleFilters({ minPower: 400 }, NOW).displacement).toEqual({
-      min: 600,
-      max: 6500,
-    });
-    const powerful = createMultipleVehicles(20, { minPower: 400 }, NOW);
-    expect(powerful.every(({ displacement }) => displacement >= 3478)).toBe(true);
-  });
-
-  it('keeps only months in which the requested engine was plausible', () => {
-    const { dates } = resolveVehicleFilters(
-      { minDisplacement: 1000, maxDisplacement: 1000, minPower: 110, maxPower: 110 },
-      NOW
-    );
-    expect(dates[0]).toEqual({ year: 2005, month: 1 });
-  });
-});
-
-describe('specificPowerRange', () => {
-  it.each<[Parameters<typeof specificPowerRange>[0], number, number, number]>([
-    ['Gasolina', 2020, 45, 115],
-    ['Gasolina', 2000, 45, 100],
-    ['Gasolina', 1980, 45, 75],
-    ['Gasóleo', 2020, 40, 95],
-    ['Gasóleo', 2003, 40, 80],
-    ['Gasóleo', 1995, 40, 65],
-    ['Gasóleo', 1985, 40, 50],
-    ['Híbrido', 2015, 55, 100],
-  ])('%s in %i allows %i to %i cv per litre', (fuel, year, min, max) => {
-    expect(specificPowerRange(fuel, { year, month: 1 })).toEqual({ min, max });
   });
 });
 
@@ -218,36 +209,41 @@ describe('createMultipleVehicles', () => {
     { minDisplacement: 1000, maxDisplacement: 1200 },
     { minPower: 150, maxPower: 200 },
     { year: 2021, minDisplacement: 1500, maxDisplacement: 2000, minPower: 100, maxPower: 150 },
-    { minDisplacement: 600, maxDisplacement: 600 },
   ];
 
   it.each(cases)('keeps every vehicle inside %o', (filters) => {
     const vehicles = createMultipleVehicles(MAX_PLATE_BATCH_SIZE, filters, NOW);
-    const { dates, displacement, power } = resolveVehicleFilters(filters, NOW);
-    const allowed = new Set(dates.map(({ year, month }: YearMonth) => year * 12 + month));
+    const allowed = new Set(allowedMonths(filters).map(({ year, month }) => year * 12 + month));
+    const { minDisplacement = 0, maxDisplacement = Infinity } = filters;
+    const { minPower = 0, maxPower = Infinity } = filters;
     expect(new Set(vehicles.map(({ plate }) => plate)).size).toBe(MAX_PLATE_BATCH_SIZE);
     for (const vehicle of vehicles) {
       const { year, month } = vehicle.firstRegistration;
       expect(allowed.has(year * 12 + month)).toBe(true);
       expect(platesErasFor(vehicle.firstRegistration)).toContain(vehicle.era);
       expect(plateEra(vehicle.plate)).toBe(vehicle.era);
-      expect(vehicle.displacement).toBeGreaterThanOrEqual(displacement.min);
-      expect(vehicle.displacement).toBeLessThanOrEqual(displacement.max);
-      expect(vehicle.power).toBeGreaterThanOrEqual(power.min);
-      expect(vehicle.power).toBeLessThanOrEqual(power.max);
-      const perLitre = (vehicle.power * 1000) / vehicle.displacement;
-      const specific = specificPowerRange(vehicle.fuel, vehicle.firstRegistration);
-      expect(perLitre).toBeGreaterThanOrEqual(specific.min - 1);
-      expect(perLitre).toBeLessThanOrEqual(specific.max + 1);
-      if (year < 2000) expect(vehicle.fuel).not.toBe('Híbrido');
-      if (vehicle.fuel === 'Gasóleo') expect(vehicle.displacement).toBeGreaterThanOrEqual(1200);
-      if (vehicle.fuel === 'Híbrido') expect(vehicle.displacement).toBeGreaterThanOrEqual(1000);
-    }
-  });
+      expect(vehicle.displacement).toBeGreaterThanOrEqual(minDisplacement);
+      expect(vehicle.displacement).toBeLessThanOrEqual(maxDisplacement);
+      expect(vehicle.power).toBeGreaterThanOrEqual(minPower);
+      expect(vehicle.power).toBeLessThanOrEqual(maxPower);
 
-  it('leaves engines under 1000 cm³ to petrol', () => {
-    const vehicles = createMultipleVehicles(50, { maxDisplacement: 999 }, NOW);
-    expect(new Set(vehicles.map(({ fuel }) => fuel))).toEqual(new Set(['Gasolina']));
+      const source = CATALOGUE.find(
+        (entry) =>
+          entry.make === vehicle.make &&
+          entry.model === vehicle.model &&
+          entry.version === vehicle.version &&
+          entry.displacement === vehicle.displacement &&
+          entry.power === vehicle.power &&
+          entry.fuel === vehicle.fuel &&
+          entry.from <= year &&
+          entry.to >= year
+      );
+      expect(source).toBeDefined();
+      const typical = typicalPrice(source!, vehicle.firstRegistration);
+      expect(vehicle.price % 50).toBe(0);
+      expect(vehicle.price).toBeGreaterThanOrEqual(typical * (1 - PRICE_SPREAD) - 25);
+      expect(vehicle.price).toBeLessThanOrEqual(typical * (1 + PRICE_SPREAD) + 25);
+    }
   });
 
   it('creates a single vehicle with the same rules', () => {

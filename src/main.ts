@@ -21,14 +21,16 @@ import { createMultipleIBANs, formatIBAN, MAX_IBAN_BATCH_SIZE } from './iban';
 import { createMultipleNIFs, MAX_NIF_BATCH_SIZE, type NIFCategory } from './nif';
 import {
   createMultipleVehicles,
-  FIRST_REGISTRATION_YEAR,
+  DISPLACEMENT_LIMITS,
   MAX_PLATE_BATCH_SIZE,
   plateStyle,
+  POWER_LIMITS,
   VehicleFilterError,
   type VehicleFilterField,
   type VehicleFilters,
   type VehicleResult,
 } from './plate';
+import { FIRST_CATALOGUE_YEAR } from './vehicles';
 import { bankCatalogue, bankReferenceSource } from './banks';
 import { startPWA } from './pwa';
 
@@ -309,21 +311,28 @@ const FILTER_INPUTS: Record<VehicleFilterField, readonly string[]> = {
   month: ['plate-month', 'plate-year'],
   displacement: ['plate-cm3-min', 'plate-cm3-max'],
   power: ['plate-cv-min', 'plate-cv-max'],
-  combination: ['plate-cm3-min', 'plate-cm3-max', 'plate-cv-min', 'plate-cv-max'],
+  combination: [
+    'plate-month',
+    'plate-year',
+    'plate-cm3-min',
+    'plate-cm3-max',
+    'plate-cv-min',
+    'plate-cv-max',
+  ],
 };
 
 function filterMessage(field: VehicleFilterField): string {
   switch (field) {
     case 'year':
-      return `Escolhe um ano entre ${FIRST_REGISTRATION_YEAR} e ${new Date().getFullYear()}.`;
+      return `Escolhe um ano entre ${FIRST_CATALOGUE_YEAR} e ${new Date().getFullYear()}.`;
     case 'month':
       return 'A 1.ª matrícula não pode ser num mês que ainda não chegou.';
     case 'displacement':
-      return 'Escolhe uma cilindrada entre 600 e 6500 cm³, com o mínimo abaixo do máximo.';
+      return `Escolhe uma cilindrada entre ${DISPLACEMENT_LIMITS.min} e ${DISPLACEMENT_LIMITS.max} cm³, com o mínimo abaixo do máximo.`;
     case 'power':
-      return 'Escolhe uma potência entre 30 e 650 cv, com o mínimo abaixo do máximo.';
+      return `Escolhe uma potência entre ${POWER_LIMITS.min} e ${POWER_LIMITS.max} cv, com o mínimo abaixo do máximo.`;
     case 'combination':
-      return 'Não há carros plausíveis com essa cilindrada e essa potência juntas.';
+      return 'Nenhum carro do catálogo corresponde a estes filtros.';
   }
 }
 
@@ -354,9 +363,21 @@ function setFilterError(error: VehicleFilterError | null): void {
   if (error) element(FILTER_INPUTS[error.field][0]!).focus();
 }
 
-function vehicleSummary({ firstRegistration, displacement, power, fuel }: VehicleResult): string {
+const priceFormat = new Intl.NumberFormat('pt-PT', {
+  style: 'currency',
+  currency: 'EUR',
+  maximumFractionDigits: 0,
+});
+
+function vehicleSummary({
+  firstRegistration,
+  displacement,
+  power,
+  fuel,
+  price,
+}: VehicleResult): string {
   const month = String(firstRegistration.month).padStart(2, '0');
-  return `1.ª matrícula ${month}/${firstRegistration.year} · ${displacement} cm³ · ${power} cv · ${fuel}`;
+  return `1.ª matrícula ${month}/${firstRegistration.year} · ${displacement} cm³ · ${power} cv · ${fuel} · ≈ ${priceFormat.format(price)}`;
 }
 
 function plateElement(vehicle: VehicleResult, identifier: HTMLElement): HTMLElement {
@@ -589,10 +610,14 @@ function renderResults(): void {
     const bankName = document.createElement('p');
     bankName.className = 'result-bank';
     bankName.textContent = result.label;
-    content.append(
-      result.vehicle ? plateElement(result.vehicle, identifier) : identifier,
-      bankName
-    );
+    content.append(result.vehicle ? plateElement(result.vehicle, identifier) : identifier);
+    if (result.vehicle) {
+      const name = document.createElement('p');
+      name.className = 'result-vehicle';
+      name.textContent = `${result.vehicle.make} ${result.vehicle.model} ${result.vehicle.version}`;
+      content.append(name);
+    }
+    content.append(bankName);
     const copy = document.createElement('button');
     copy.type = 'button';
     copy.className = 'icon-button result-copy';
