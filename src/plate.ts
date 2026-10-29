@@ -40,8 +40,8 @@ export interface VehicleResult {
   displacement: number;
   power: number;
   fuel: Fuel;
-  /** Approximate asking price in euros, rounded to 50. */
-  price: number;
+  /** Approximate asking price in euros, rounded to 50; null when an own entry has none. */
+  price: number | null;
 }
 
 export type VehicleFilterField = 'year' | 'month' | 'displacement' | 'power' | 'combination';
@@ -106,7 +106,7 @@ function digitPair(min = 0): string {
   return String(randomInt(min, 99)).padStart(2, '0');
 }
 
-function monthIndex({ year, month }: YearMonth): number {
+export function monthIndex({ year, month }: YearMonth): number {
   return year * 12 + month - 1;
 }
 
@@ -203,10 +203,17 @@ interface ResolvedFilters {
   candidates: Candidate[];
 }
 
-export function resolveVehicleFilters(
+export interface ParsedFilters {
+  dates: YearMonth[];
+  displacement: Range;
+  power: Range;
+}
+
+/** Validates filters and expands them to the allowed months and engine ranges. */
+export function parseVehicleFilters(
   filters: VehicleFilters = {},
   now: Date = new Date()
-): ResolvedFilters {
+): ParsedFilters {
   const current = { year: now.getFullYear(), month: now.getMonth() + 1 };
   const { year, month } = filters;
   if (
@@ -236,7 +243,14 @@ export function resolveVehicleFilters(
     'displacement'
   );
   const power = boundedRange(filters.minPower, filters.maxPower, POWER_LIMITS, 'power');
+  return { dates, displacement, power };
+}
 
+export function resolveVehicleFilters(
+  filters: VehicleFilters = {},
+  now: Date = new Date()
+): ResolvedFilters {
+  const { dates, displacement, power } = parseVehicleFilters(filters, now);
   const candidates = CATALOGUE.flatMap((version) => {
     if (
       version.displacement < displacement.min ||

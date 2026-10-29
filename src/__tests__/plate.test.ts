@@ -227,7 +227,8 @@ describe('createMultipleVehicles', () => {
       expect(vehicle.power).toBeGreaterThanOrEqual(minPower);
       expect(vehicle.power).toBeLessThanOrEqual(maxPower);
 
-      const source = CATALOGUE.find(
+      // Two generations can share a name and specs in their overlap year; any of them may be the source.
+      const sources = CATALOGUE.filter(
         (entry) =>
           entry.make === vehicle.make &&
           entry.model === vehicle.model &&
@@ -238,11 +239,17 @@ describe('createMultipleVehicles', () => {
           entry.from <= year &&
           entry.to >= year
       );
-      expect(source).toBeDefined();
-      const typical = typicalPrice(source!, vehicle.firstRegistration);
-      expect(vehicle.price % 50).toBe(0);
-      expect(vehicle.price).toBeGreaterThanOrEqual(typical * (1 - PRICE_SPREAD) - 25);
-      expect(vehicle.price).toBeLessThanOrEqual(typical * (1 + PRICE_SPREAD) + 25);
+      expect(sources.length).toBeGreaterThan(0);
+      const price = vehicle.price ?? Number.NaN;
+      expect(price % 50).toBe(0);
+      expect(
+        sources.some((source) => {
+          const typical = typicalPrice(source, vehicle.firstRegistration);
+          return (
+            price >= typical * (1 - PRICE_SPREAD) - 25 && price <= typical * (1 + PRICE_SPREAD) + 25
+          );
+        })
+      ).toBe(true);
     }
   });
 

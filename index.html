@@ -144,6 +144,18 @@
             </div>
           </div>
           <div id="plate-controls" class="plate-control" hidden>
+            <div id="plate-source-row" class="form-row" hidden>
+              <div class="row-label">
+                <span id="plate-source-label" class="field-label">Matrículas</span>
+                <span class="row-hint">As tuas vêm da lista interna</span>
+              </div>
+              <div class="row-field">
+                <div class="segmented" role="radiogroup" aria-labelledby="plate-source-label">
+                  <label class="segment"><input class="sr-only" type="radio" name="plate-source" value="own" /><span id="own-plates-count">As minhas (0)</span></label>
+                  <label class="segment"><input class="sr-only" type="radio" name="plate-source" value="random" checked /><span>Aleatórias</span></label>
+                </div>
+              </div>
+            </div>
             <div class="form-row">
               <div class="row-label">
                 <span id="plate-date-label" class="field-label">1.ª matrícula</span>

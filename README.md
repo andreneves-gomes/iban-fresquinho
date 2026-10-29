@@ -66,12 +66,15 @@ src/
   nif.ts             NIF generation and checksum validation (no DOM)
   plate.ts           Licence plates by era, vehicle filters and generation (no DOM)
   vehicles.ts        Catalogue of real car versions and the indicative price model
+  ownPlates.ts       Internal plate list: CSV parsing, template and filtering (no DOM)
+  ownPlatesData.ts   Reads the git-ignored data/plates.csv at build time, if present
   banks.ts           Bank catalogue derived from docs/bank-reference.json
   types.ts           Shared IBAN types
   pwa.ts             Service worker registration and consent-based updates
   styles.css         Design tokens and component styles
   __tests__/         Domain, UI (jsdom), PWA and security-configuration tests
 docs/                Architecture, maintenance and domain references
+data/                plates.example.csv template; your plates.csv stays local (git-ignored)
 public/              Icons, images, robots/sitemap and third-party notices
 index.html           Markup, metadata and structured data
 vercel.json          Hosting headers, including the Content Security Policy
@@ -93,6 +96,8 @@ pnpm-workspace.yaml  Supply-chain settings for pnpm
 ## Privacy
 
 There is no backend, analytics or external lookup. Generated values live in memory and disappear on reload; only the theme preference (`iban-theme`) is stored. Hosting providers may still log ordinary page requests.
+
+An internal build can include your own plates from a git-ignored `data/plates.csv`; see [Own plates](docs/plate-reference.md#own-plates-internal-list). Never deploy such a build publicly.
 
 ## Licence
 

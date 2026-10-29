@@ -23,13 +23,18 @@ import {
   createMultipleVehicles,
   DISPLACEMENT_LIMITS,
   MAX_PLATE_BATCH_SIZE,
+  platesErasFor,
   plateStyle,
   POWER_LIMITS,
   VehicleFilterError,
+  type PlateEra,
+  type PlateStyle,
   type VehicleFilterField,
   type VehicleFilters,
   type VehicleResult,
 } from './plate';
+import { parseOwnPlates, pickOwnVehicles } from './ownPlates';
+import { OWN_PLATES_CSV } from './ownPlatesData';
 import { FIRST_CATALOGUE_YEAR } from './vehicles';
 import { bankCatalogue, bankReferenceSource } from './banks';
 import { startPWA } from './pwa';
@@ -107,6 +112,8 @@ const nifLabels: Record<NIFCategory, string> = {
 let activeTool: Tool = 'iban';
 let nifCategory: NIFCategory = 'individual';
 let selectedCodes: string[] = [];
+let plateSource: 'random' | 'own' = 'random';
+let ownVehicles: VehicleResult[] = [];
 let initialized = false;
 // Bumped by every copy, generation and tool switch; a clipboard reply for an older value is ignored.
 let copyRequest = 0;
@@ -332,7 +339,9 @@ function filterMessage(field: VehicleFilterField): string {
     case 'power':
       return `Escolhe uma potência entre ${POWER_LIMITS.min} e ${POWER_LIMITS.max} cv, com o mínimo abaixo do máximo.`;
     case 'combination':
-      return 'Nenhum carro do catálogo corresponde a estes filtros.';
+      return plateSource === 'own'
+        ? 'Nenhuma das tuas matrículas corresponde a estes filtros.'
+        : 'Nenhum carro do catálogo corresponde a estes filtros.';
   }
 }
 
@@ -377,11 +386,22 @@ function vehicleSummary({
   price,
 }: VehicleResult): string {
   const month = String(firstRegistration.month).padStart(2, '0');
-  return `1.ª matrícula ${month}/${firstRegistration.year} · ${displacement} cm³ · ${power} cv · ${fuel} · ≈ ${priceFormat.format(price)}`;
+  const summary = `1.ª matrícula ${month}/${firstRegistration.year} · ${displacement} cm³ · ${power} cv · ${fuel}`;
+  return price === null ? summary : `${summary} · ≈ ${priceFormat.format(price)}`;
 }
 
+// Own plates can be imports whose plate is newer than their first registration abroad.
+const ERA_STYLE: Record<PlateEra, PlateStyle> = {
+  'AA-00-00': 'black',
+  '00-00-AA': 'dated',
+  '00-AA-00': 'dated',
+  'AA-00-AA': 'modern',
+};
+
 function plateElement(vehicle: VehicleResult, identifier: HTMLElement): HTMLElement {
-  const style = plateStyle(vehicle.firstRegistration);
+  const style = platesErasFor(vehicle.firstRegistration).includes(vehicle.era)
+    ? plateStyle(vehicle.firstRegistration)
+    : ERA_STYLE[vehicle.era];
   const plate = document.createElement('span');
   plate.className = `plate plate--${style}`;
   if (style !== 'black') {
@@ -560,7 +580,11 @@ function generateResults(): void {
   resetCopyFeedback();
   updateStepper();
   renderResults();
-  element('generation-status').textContent = readyMessage(count);
+  const made = state.results.length;
+  element('generation-status').textContent =
+    made < count
+      ? `${readyMessage(made)} Só há ${made} das tuas com estes filtros.`
+      : readyMessage(count);
   if (hadResults) {
     animateFeedback(
       resultList,
@@ -575,7 +599,11 @@ function generateResults(): void {
 
 function generateIdentifiers(count: number): IdentifierResult[] {
   if (activeTool === 'plate') {
-    return createMultipleVehicles(count, vehicleFilters()).map((vehicle) => ({
+    const vehicles =
+      plateSource === 'own'
+        ? pickOwnVehicles(ownVehicles, count, vehicleFilters())
+        : createMultipleVehicles(count, vehicleFilters());
+    return vehicles.map((vehicle) => ({
       value: vehicle.plate,
       formatted: vehicle.plate,
       label: vehicleSummary(vehicle),
@@ -785,6 +813,21 @@ function searchable(value: string): string {
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase();
+}
+
+function initOwnPlates(): void {
+  const { vehicles, errors } = parseOwnPlates(OWN_PLATES_CSV);
+  for (const message of errors) console.error(`data/plates.csv — ${message}`);
+  ownVehicles = vehicles;
+  element('plate-source-row').hidden = vehicles.length === 0;
+  element('own-plates-count').textContent = `As minhas (${vehicles.length})`;
+  plateSource = vehicles.length > 0 ? 'own' : 'random';
+  for (const radio of document.querySelectorAll<HTMLInputElement>('[name="plate-source"]')) {
+    radio.checked = radio.value === plateSource;
+    radio.addEventListener('change', () => {
+      if (radio.checked) plateSource = radio.value === 'own' ? 'own' : 'random';
+    });
+  }
 }
 
 function closeDialogSmoothly(dialog: HTMLDialogElement): void {
@@ -1194,6 +1237,7 @@ function init(): void {
   });
   initTools();
   element<HTMLInputElement>('plate-year').max = String(new Date().getFullYear());
+  initOwnPlates();
   renderBankOptions();
   generateResults();
 }

@@ -9,6 +9,7 @@ import { CATALOGUE, vehicleName } from '../vehicles';
 
 vi.mock('../styles.css', () => ({}));
 vi.mock('../pwa', () => ({ startPWA: vi.fn() }));
+vi.mock('../ownPlatesData', () => ({ OWN_PLATES_CSV: '' }));
 
 const html = readFileSync(resolve('index.html'), 'utf8');
 let app: typeof import('../main');
@@ -770,6 +771,70 @@ describe('Matrícula Fresquinha', () => {
     expect(document.querySelector('#copy-value-label')!.textContent).toBe(
       'Matrícula para cópia manual'
     );
+  });
+
+  it('hides the plate source switch when no internal list was built in', () => {
+    button('#tab-plate').click();
+    expect(document.querySelector<HTMLElement>('#plate-source-row')!.hidden).toBe(true);
+  });
+
+  describe('with an internal plate list', () => {
+    const list = [
+      'Matrícula;Marca;Modelo;Versão;Combustível;cm³;cv;Mês;Ano;Preço',
+      'AA-01-AA;SEAT;Ibiza;1.0 TSI;Gasolina;999;95;1;2024;15000',
+      '12-AB-34;Renault;Clio;1.5 dCi 90;Gasóleo;1461;90;3;2015;',
+      '34-CD-56;Lada;Niva;1.7;Gasolina;1690;80;5;2013;',
+      'nope;Lada;Niva;1.7;Gasolina;1690;80;5;2013;',
+    ].join('\n');
+
+    beforeEach(async () => {
+      vi.spyOn(console, 'error').mockImplementation(() => undefined);
+      vi.resetModules();
+      vi.doMock('../ownPlatesData', () => ({ OWN_PLATES_CSV: list }));
+      document.body.innerHTML = new DOMParser().parseFromString(html, 'text/html').body.innerHTML;
+      app = await import('../main');
+      app.init();
+      button('#tab-plate').click();
+    });
+
+    afterEach(() => {
+      vi.doUnmock('../ownPlatesData');
+    });
+
+    it('uses the list by default, with the same filters and display', () => {
+      expect(console.error).toHaveBeenCalledWith(expect.stringContaining('Linha 5'));
+      expect(document.querySelector<HTMLElement>('#plate-source-row')!.hidden).toBe(false);
+      expect(document.querySelector('#own-plates-count')!.textContent).toBe('As minhas (3)');
+      generate(6);
+      expect(new Set(plates())).toEqual(new Set(['AA-01-AA', '12-AB-34', '34-CD-56']));
+      expect(document.querySelector('#generation-status')!.textContent).toBe(
+        '3 matrículas prontas. Só há 3 das tuas com estes filtros.'
+      );
+      const lada = [...rows()].find((row) => row.textContent!.includes('34-CD-56'))!;
+      expect(lada.querySelector('.result-vehicle')!.textContent).toBe('Lada Niva 1.7');
+      expect(lada.querySelector('.result-bank')!.textContent).toBe(
+        '1.ª matrícula 05/2013 · 1690 cm³ · 80 cv · Gasolina'
+      );
+      fill('plate-year', '2024');
+      generate(1);
+      expect(plates()).toEqual(['AA-01-AA']);
+      expect(document.querySelector('.plate')!.classList.contains('plate--modern')).toBe(true);
+    });
+
+    it('explains when none of the list matches, and can switch back to random plates', () => {
+      fill('plate-cv-min', '200');
+      generate(1);
+      expect(document.querySelector('#plate-error')!.textContent).toBe(
+        'Nenhuma das tuas matrículas corresponde a estes filtros.'
+      );
+      fill('plate-cv-min', '');
+      const random = input('[name="plate-source"][value="random"]');
+      random.checked = true;
+      random.dispatchEvent(new Event('change'));
+      generate(5);
+      expect(rows()).toHaveLength(5);
+      expect(document.querySelector('#plate-error')!.textContent).toBe('');
+    });
   });
 });
 

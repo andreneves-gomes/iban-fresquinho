@@ -8,6 +8,8 @@ The NIF feature also generates identifiers without querying AT, VIES or any regi
 
 The licence plate feature generates registration numbers in the format of each era without querying IMT or the vehicle register. Almost every combination of the older formats has been issued, so a generated plate may belong to a real vehicle, with a different owner and almost certainly a different model. The car version shown comes from a built-in catalogue of factory specs and its price is an estimate; neither is linked to the plate. The catalogue stores no listing data, only specs and rounded price anchors. Never use the output to identify a vehicle, look up an owner or support a real claim.
 
+The optional internal plate list (`data/plates.csv`) may hold real plates, which are personal data. It is git-ignored and read only at build time, so the repository and the public Vercel build never contain it. A build made on a machine that has the file bundles the list into its JavaScript: serve such a build only on the internal network, never on a public host, and only with plates your organisation allows you to use for testing. Delete the file to stop including it.
+
 No absolute security guarantee is possible. A compromised browser, device, extension, dependency or hosting account remains outside the generator's protection.
 
 ## Data Handling

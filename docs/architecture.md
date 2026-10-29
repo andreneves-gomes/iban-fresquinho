@@ -42,6 +42,8 @@ Randomness comes from `Math.random`. That is enough for test-data variety; the v
 | `toolStates`    | Per tool: current results, raw quantity text, error message and invalid flag |
 | `selectedCodes` | IBAN bank selection, shared by the shortcut buttons and the full list        |
 | `nifCategory`   | NIF profile for the next generation                                          |
+| `plateSource`   | `'own'` (internal list) or `'random'`; starts on `'own'` when the list has rows |
+| `ownVehicles`   | Valid rows of the internal plate list, parsed once at start-up               |
 | `copyRequest`   | Counter that identifies the latest clipboard request                         |
 
 Vehicle filters are not copied into state: they are read from their inputs (`#plate-month`, `#plate-year`, `#plate-cm3-*`, `#plate-cv-*`) when **Gerar** is pressed. The inputs stay in the DOM while hidden, so they survive tool switches.
@@ -109,6 +111,7 @@ The Content Security Policy in `vercel.json` allows only same-origin scripts, st
 | `nif.test.ts`      | All 11 checksum remainders, profiles, batch limits, collisions                                          |
 | `plate.test.ts`    | Era boundaries, letter and reserved-group rules, filter validation and combinations, batch invariants against the catalogue and price spread |
 | `vehicles.test.ts` | Catalogue integrity (ranges, years sold, duplicates, year coverage) and the depreciation model |
+| `ownPlates.test.ts` | Internal plate list parsing, errors, filtering, the example template and, when present, the local `data/plates.csv` |
 | `banks.test.ts`    | Catalogue counts, source metadata and the default-generation policy                                     |
 | `main.test.ts`     | The real `index.html` in jsdom, driven through DOM events: switching, state, clipboard, picker, dialogs |
 | `pwa.test.ts`      | Update prompt and reload behaviour                                                                      |

@@ -49,6 +49,14 @@ A new tool touches these places. Matrícula Fresquinha (`plate`) is the most com
 6. **Metadata:** update the page title and description, keywords, JSON-LD and the manifest description in `vite.config.ts`, then [recompute the CSP hash](#change-the-structured-data).
 7. **Docs:** add the tool to the README (table, "Em português", usage, layout, documentation list), [architecture.md](architecture.md) and, if it can collide with real data, [SECURITY.md](../SECURITY.md).
 
+### Fill the internal plate list
+
+1. Copy `data/plates.example.csv` to `data/plates.csv` (git-ignored) and fill `Matrícula`, `Mês` and `Ano` on the rows you need. Excel can open and save it directly.
+2. Run `pnpm exec vitest run ownPlates`. The last test checks every row of your file and lists invalid ones by line number.
+3. Run `pnpm run build` and serve `dist/` on the internal network only (for example `pnpm run preview -- --host`). Never push this `dist/` or deploy it publicly; the public site is built by Vercel from git, which never has the file.
+
+Format and rules are in [plate-reference.md](plate-reference.md#own-plates-internal-list).
+
 ### Update the bank list
 
 The catalogue is a dated snapshot in `docs/bank-reference.json` (schema version 2), taken from the Banco de Portugal workbook at the URL stored in `source.url`. No importer is kept in the repository.

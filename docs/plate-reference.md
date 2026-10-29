@@ -64,6 +64,20 @@ Prices drift: refresh the anchors and the rate about once a year with the same m
 - Only versions whose displacement and power fall inside the filters, and that were sold in at least one allowed month, are offered. Each version is equally likely; the month is then picked among its allowed months.
 - Invalid filters and impossible combinations throw `VehicleFilterError` naming what to change: `year`, `month`, `displacement`, `power` or `combination` (no catalogue version matches). The interface marks those fields and keeps the previous results.
 
+## Own plates (internal list)
+
+Random plates are not linked to the car shown. To use specific plates, such as test plates supplied by an insurer's data provider, fill an internal list:
+
+1. Copy `data/plates.example.csv` to `data/plates.csv`. The example is the catalogue with an empty `Matrícula` column, in Excel's Portuguese format (UTF-8 with BOM, semicolons).
+2. Fill `Matrícula`, `Mês` and `Ano` on the rows you need. Rows without a plate are ignored. `Preço` is optional: when empty and the row matches a catalogue version, the typical price is used. Rows for cars outside the catalogue can be added with any make, model and version.
+3. Run `pnpm exec vitest run ownPlates` to check the file, then `pnpm run build`.
+
+The plate can be written with dashes, spaces, dots or nothing (`AB-12-CD`, `AB 12 CD`, `AB12CD`); fuel accepts `Gasolina`, `Gasóleo`/`Diesel` and `Híbrido`. Plates are checked for a Portuguese shape only, not against the generator's era rules, so imports and special series are accepted. If a plate's format does not match the first-registration date (for example a used import), it is drawn in the design of its own format.
+
+When the list has valid rows, the plate tool shows **As minhas (N) | Aleatórias** and starts on the list. The same filters apply; if fewer rows match than requested, all matches are shown in random order and the status says so. Invalid rows are reported with their line numbers in the test and in the browser console, and are left out.
+
+`data/plates.csv` is git-ignored, so it never reaches GitHub or the public Vercel build. It is bundled into any build made on a machine that has it: serve that build only on the internal network, never deploy it publicly.
+
 ## API contract (`src/plate.ts`)
 
 - `platesErasFor(date)` returns the formats in use for a `{ year, month }`; two in 2005, one otherwise.
@@ -74,6 +88,7 @@ Prices drift: refresh the anchors and the rate about once a year with the same m
 - `createVehicle(filters, now)` and `createMultipleVehicles(count, filters, now)` return `{ plate, era, firstRegistration, make, model, version, displacement, power, fuel, price }`. Batches take 1 to 100, are unique by plate, and give up after `count × 10` attempts instead of returning a partial batch.
 - `now` is a parameter so tests can fix the current month.
 - `src/vehicles.ts` exports `CATALOGUE`, `FIRST_CATALOGUE_YEAR`, `typicalPrice(version, date)` and `vehicleName(version)`. Add a version by appending a row; the catalogue tests check ranges, years, duplicates and year coverage.
+- `src/ownPlates.ts` exports `parseOwnPlates(text, now)` (returns `{ vehicles, errors }`), `normalisePlate(value)`, `pickOwnVehicles(vehicles, count, filters, now)` and `ownPlatesTemplate()`. `src/ownPlatesData.ts` reads `data/plates.csv` at build time with `import.meta.glob`, which yields nothing when the file is absent. If the catalogue changes, regenerate `data/plates.example.csv` from `ownPlatesTemplate()`; a test fails until they match.
 
 ## Real vehicles
 
